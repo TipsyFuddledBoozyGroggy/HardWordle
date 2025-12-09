@@ -40,19 +40,15 @@
     "ParameterValue": "1024"
   },
   {
-    "ParameterKey": "GitHubOwner",
-    "ParameterValue": "REPLACE_WITH_YOUR_GITHUB_USERNAME"
+    "ParameterKey": "CodeStarConnectionArn",
+    "ParameterValue": "REPLACE_WITH_YOUR_CODESTAR_CONNECTION_ARN"
   },
   {
-    "ParameterKey": "GitHubRepo",
-    "ParameterValue": "hard-wordle"
+    "ParameterKey": "RepositoryId",
+    "ParameterValue": "REPLACE_WITH_OWNER/REPO_NAME"
   },
   {
-    "ParameterKey": "GitHubBranch",
+    "ParameterKey": "BranchName",
     "ParameterValue": "main"
-  },
-  {
-    "ParameterKey": "GitHubToken",
-    "ParameterValue": "REPLACE_WITH_YOUR_GITHUB_TOKEN"
   }
 ]

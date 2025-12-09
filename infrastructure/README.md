@@ -2,6 +2,14 @@
 
 This guide provides comprehensive instructions for deploying the Hard Wordle application to AWS using CloudFormation Infrastructure as Code (IaC).
 
+## 🚀 Quick Start
+
+**New to this project?** Start here:
+- [QUICK-START.md](./QUICK-START.md) - 5-minute setup guide
+- [CODESTAR-SETUP.md](./CODESTAR-SETUP.md) - Complete CodeStar connection setup
+
+**Migrating from GitHub OAuth?** See [MIGRATION-NOTES.md](./MIGRATION-NOTES.md)
+
 ## Table of Contents
 
 - [Overview](#overview)

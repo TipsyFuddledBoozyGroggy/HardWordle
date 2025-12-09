@@ -10,24 +10,18 @@ Parameters:
       - dev
       - prod
   
-  GitHubOwner:
+  CodeStarConnectionArn:
     Type: String
-    Description: GitHub repository owner
+    Description: ARN of the CodeStar Connection to your Git provider (GitHub, GitLab, or Bitbucket)
   
-  GitHubRepo:
+  RepositoryId:
     Type: String
-    Default: hard-wordle
-    Description: GitHub repository name
+    Description: Full repository ID in format 'owner/repo-name' (e.g., 'myusername/hard-wordle')
   
-  GitHubBranch:
+  BranchName:
     Type: String
     Default: main
-    Description: GitHub branch to track
-  
-  GitHubToken:
-    Type: String
-    NoEcho: true
-    Description: GitHub personal access token for CodePipeline
+    Description: Git branch to track for automatic deployments
 
 Resources:
   # S3 Bucket for Pipeline Artifacts
@@ -238,15 +232,15 @@ Resources:
             - Name: SourceAction
               ActionTypeId:
                 Category: Source
-                Owner: ThirdParty
-                Provider: GitHub
+                Owner: AWS
+                Provider: CodeStarSourceConnection
                 Version: '1'
               Configuration:
-                Owner: !Ref GitHubOwner
-                Repo: !Ref GitHubRepo
-                Branch: !Ref GitHubBranch
-                OAuthToken: !Ref GitHubToken
-                PollForSourceChanges: true
+                ConnectionArn: !Ref CodeStarConnectionArn
+                FullRepositoryId: !Ref RepositoryId
+                BranchName: !Ref BranchName
+                OutputArtifactFormat: CODE_ZIP
+                DetectChanges: true
               OutputArtifacts:
                 - Name: SourceOutput
         
