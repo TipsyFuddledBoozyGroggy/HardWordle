@@ -1,0 +1,58 @@
+[
+  {
+    "ParameterKey": "EnvironmentName",
+    "ParameterValue": "prod"
+  },
+  {
+    "ParameterKey": "VpcCIDR",
+    "ParameterValue": "10.1.0.0/16"
+  },
+  {
+    "ParameterKey": "PublicSubnet1CIDR",
+    "ParameterValue": "10.1.1.0/24"
+  },
+  {
+    "ParameterKey": "PublicSubnet2CIDR",
+    "ParameterValue": "10.1.2.0/24"
+  },
+  {
+    "ParameterKey": "ContainerImage",
+    "ParameterValue": "REPLACE_WITH_ECR_IMAGE_URI"
+  },
+  {
+    "ParameterKey": "DesiredCount",
+    "ParameterValue": "2"
+  },
+  {
+    "ParameterKey": "MinTaskCount",
+    "ParameterValue": "2"
+  },
+  {
+    "ParameterKey": "MaxTaskCount",
+    "ParameterValue": "4"
+  },
+  {
+    "ParameterKey": "ContainerCpu",
+    "ParameterValue": "512"
+  },
+  {
+    "ParameterKey": "ContainerMemory",
+    "ParameterValue": "1024"
+  },
+  {
+    "ParameterKey": "GitHubOwner",
+    "ParameterValue": "REPLACE_WITH_YOUR_GITHUB_USERNAME"
+  },
+  {
+    "ParameterKey": "GitHubRepo",
+    "ParameterValue": "hard-wordle"
+  },
+  {
+    "ParameterKey": "GitHubBranch",
+    "ParameterValue": "main"
+  },
+  {
+    "ParameterKey": "GitHubToken",
+    "ParameterValue": "REPLACE_WITH_YOUR_GITHUB_TOKEN"
+  }
+]

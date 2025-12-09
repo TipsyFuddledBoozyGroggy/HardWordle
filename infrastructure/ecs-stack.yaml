@@ -1,0 +1,297 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Hard Wordle - ECS Cluster, Service, and Application Load Balancer Stack'
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: dev
+    Description: Environment name (dev, prod)
+    AllowedValues:
+      - dev
+      - prod
+  
+  ContainerImage:
+    Type: String
+    Description: Docker image URI from ECR
+  
+  DesiredCount:
+    Type: Number
+    Default: 2
+    Description: Desired number of ECS tasks
+  
+  MinTaskCount:
+    Type: Number
+    Default: 2
+    Description: Minimum number of tasks for auto-scaling
+  
+  MaxTaskCount:
+    Type: Number
+    Default: 4
+    Description: Maximum number of tasks for auto-scaling
+  
+  ContainerCpu:
+    Type: Number
+    Default: 256
+    Description: CPU units for container (256 = 0.25 vCPU)
+    AllowedValues:
+      - 256
+      - 512
+      - 1024
+      - 2048
+  
+  ContainerMemory:
+    Type: Number
+    Default: 512
+    Description: Memory for container in MB
+    AllowedValues:
+      - 512
+      - 1024
+      - 2048
+      - 4096
+
+Resources:
+  # ECS Cluster
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub ${EnvironmentName}-hard-wordle-cluster
+      CapacityProviders:
+        - FARGATE
+        - FARGATE_SPOT
+      DefaultCapacityProviderStrategy:
+        - CapacityProvider: FARGATE
+          Weight: 1
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-hard-wordle-cluster
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: hard-wordle
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # CloudWatch Log Group
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /ecs/${EnvironmentName}-hard-wordle
+      RetentionInDays: 7
+
+  # ECS Task Execution Role
+  TaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${EnvironmentName}-hard-wordle-task-execution-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-hard-wordle-task-execution-role
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: hard-wordle
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # ECS Task Definition
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${EnvironmentName}-hard-wordle
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: !Ref ContainerCpu
+      Memory: !Ref ContainerMemory
+      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      ContainerDefinitions:
+        - Name: hard-wordle
+          Image: !Ref ContainerImage
+          PortMappings:
+            - ContainerPort: 80
+              Protocol: tcp
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+          Essential: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-hard-wordle-task
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: hard-wordle
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # Application Load Balancer
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub ${EnvironmentName}-hard-wordle-alb
+      Type: application
+      Scheme: internet-facing
+      IpAddressType: ipv4
+      Subnets:
+        - Fn::ImportValue: !Sub ${EnvironmentName}-hard-wordle-public-subnet-1
+        - Fn::ImportValue: !Sub ${EnvironmentName}-hard-wordle-public-subnet-2
+      SecurityGroups:
+        - Fn::ImportValue: !Sub ${EnvironmentName}-hard-wordle-alb-sg
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-hard-wordle-alb
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: hard-wordle
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # Target Group
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub ${EnvironmentName}-hard-wordle-tg
+      Port: 80
+      Protocol: HTTP
+      TargetType: ip
+      VpcId:
+        Fn::ImportValue: !Sub ${EnvironmentName}-hard-wordle-vpc-id
+      HealthCheckEnabled: true
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Matcher:
+        HttpCode: 200
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-hard-wordle-tg
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: hard-wordle
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # ALB Listener
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
+  # ECS Service
+  ECSService:
+    Type: AWS::ECS::Service
+    DependsOn: ALBListener
+    Properties:
+      ServiceName: !Sub ${EnvironmentName}-hard-wordle-service
+      Cluster: !Ref ECSCluster
+      TaskDefinition: !Ref TaskDefinition
+      DesiredCount: !Ref DesiredCount
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets:
+            - Fn::ImportValue: !Sub ${EnvironmentName}-hard-wordle-public-subnet-1
+            - Fn::ImportValue: !Sub ${EnvironmentName}-hard-wordle-public-subnet-2
+          SecurityGroups:
+            - Fn::ImportValue: !Sub ${EnvironmentName}-hard-wordle-ecs-task-sg
+      LoadBalancers:
+        - ContainerName: hard-wordle
+          ContainerPort: 80
+          TargetGroupArn: !Ref TargetGroup
+      HealthCheckGracePeriodSeconds: 60
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-hard-wordle-service
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: hard-wordle
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # Auto Scaling Target
+  ServiceScalingTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      MaxCapacity: !Ref MaxTaskCount
+      MinCapacity: !Ref MinTaskCount
+      ResourceId: !Sub service/${ECSCluster}/${ECSService.Name}
+      RoleARN: !Sub arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+
+  # Auto Scaling Policy - CPU Based
+  ServiceScalingPolicyCPU:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub ${EnvironmentName}-hard-wordle-cpu-scaling
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref ServiceScalingTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+        TargetValue: 70.0
+        ScaleInCooldown: 300
+        ScaleOutCooldown: 60
+
+  # Auto Scaling Policy - Memory Based
+  ServiceScalingPolicyMemory:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub ${EnvironmentName}-hard-wordle-memory-scaling
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref ServiceScalingTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageMemoryUtilization
+        TargetValue: 80.0
+        ScaleInCooldown: 300
+        ScaleOutCooldown: 60
+
+Outputs:
+  ECSCluster:
+    Description: ECS Cluster Name
+    Value: !Ref ECSCluster
+    Export:
+      Name: !Sub ${EnvironmentName}-hard-wordle-ecs-cluster
+
+  ECSService:
+    Description: ECS Service Name
+    Value: !GetAtt ECSService.Name
+    Export:
+      Name: !Sub ${EnvironmentName}-hard-wordle-ecs-service
+
+  LoadBalancerUrl:
+    Description: URL of the Application Load Balancer
+    Value: !Sub http://${ApplicationLoadBalancer.DNSName}
+    Export:
+      Name: !Sub ${EnvironmentName}-hard-wordle-alb-url
+
+  TargetGroupArn:
+    Description: Target Group ARN
+    Value: !Ref TargetGroup
+    Export:
+      Name: !Sub ${EnvironmentName}-hard-wordle-target-group-arn
