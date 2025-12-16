@@ -1,0 +1,53 @@
+version: 0.2
+
+# Build Stage - Builds application and Docker container
+# This stage creates the production-ready Docker image
+
+env:
+  variables:
+    AWS_DEFAULT_REGION: "us-east-1"
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 18
+  
+  pre_build:
+    commands:
+      - echo "🏗️ Starting Build Stage..."
+      - echo "Logging in to Amazon ECR..."
+      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+      - REPOSITORY_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME
+      - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
+      - IMAGE_TAG=${COMMIT_HASH:=latest}
+      - echo "Repository URI: $REPOSITORY_URI"
+      - echo "Image Tag: $IMAGE_TAG"
+      - echo "Installing dependencies..."
+      - npm ci
+  
+  build:
+    commands:
+      - echo "📦 Building the application..."
+      - npm run build
+      - echo "🐳 Building Docker image..."
+      - docker build -t $REPOSITORY_URI:latest .
+      - docker tag $REPOSITORY_URI:latest $REPOSITORY_URI:$IMAGE_TAG
+  
+  post_build:
+    commands:
+      - echo "🚀 Pushing Docker images to ECR..."
+      - docker push $REPOSITORY_URI:latest
+      - docker push $REPOSITORY_URI:$IMAGE_TAG
+      - echo "📝 Creating imagedefinitions.json for ECS deployment..."
+      - printf '[{"name":"hard-wordle-container","imageUri":"%s"}]' $REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
+      - cat imagedefinitions.json
+      - echo "✅ Build completed successfully!"
+
+artifacts:
+  files:
+    - imagedefinitions.json
+  name: BuildArtifact
+
+cache:
+  paths:
+    - 'node_modules/**/*'

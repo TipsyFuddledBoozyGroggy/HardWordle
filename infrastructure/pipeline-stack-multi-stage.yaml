@@ -1,0 +1,368 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Hard Wordle - Multi-Stage CI/CD Pipeline (Test -> Build -> Deploy)'
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: dev
+    Description: Environment name (dev, prod)
+    AllowedValues:
+      - dev
+      - prod
+  
+  CodeStarConnectionArn:
+    Type: String
+    Description: ARN of the CodeStar Connection to your Git provider (GitHub, GitLab, or Bitbucket)
+  
+  RepositoryId:
+    Type: String
+    Description: Full repository ID in format 'owner/repo-name' (e.g., 'myusername/hard-wordle')
+  
+  BranchName:
+    Type: String
+    Default: main
+    Description: Git branch to track for automatic deployments
+
+Resources:
+  # S3 Bucket for Pipeline Artifacts
+  ArtifactBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${EnvironmentName}-hard-wordle-pipeline-artifacts-${AWS::AccountId}
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldArtifacts
+            Status: Enabled
+            ExpirationInDays: 30
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-hard-wordle-artifacts
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: hard-wordle
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # IAM Role for CodeBuild Projects
+  CodeBuildServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${EnvironmentName}-hard-wordle-codebuild-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CodeBuildPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # CloudWatch Logs permissions
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${EnvironmentName}-hard-wordle-*
+                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${EnvironmentName}-hard-wordle-*:*
+              # S3 permissions for artifacts
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:GetObjectVersion
+                Resource:
+                  - !Sub ${ArtifactBucket.Arn}/*
+              # ECR permissions
+              - Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                  - ecr:PutImage
+                  - ecr:InitiateLayerUpload
+                  - ecr:UploadLayerPart
+                  - ecr:CompleteLayerUpload
+                Resource:
+                  Fn::ImportValue: !Sub ${EnvironmentName}-hard-wordle-ecr-arn
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-hard-wordle-codebuild-role
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: hard-wordle
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # IAM Role for CodePipeline
+  CodePipelineServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${EnvironmentName}-hard-wordle-codepipeline-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codepipeline.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CodePipelinePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # S3 permissions for artifacts
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:GetObjectVersion
+                  - s3:GetBucketLocation
+                  - s3:ListBucket
+                Resource:
+                  - !GetAtt ArtifactBucket.Arn
+                  - !Sub ${ArtifactBucket.Arn}/*
+              # CodeBuild permissions
+              - Effect: Allow
+                Action:
+                  - codebuild:BatchGetBuilds
+                  - codebuild:StartBuild
+                Resource:
+                  - !GetAtt TestProject.Arn
+                  - !GetAtt BuildProject.Arn
+              # ECS permissions for deployment
+              - Effect: Allow
+                Action:
+                  - ecs:DescribeServices
+                  - ecs:DescribeTaskDefinition
+                  - ecs:DescribeTasks
+                  - ecs:ListTasks
+                  - ecs:RegisterTaskDefinition
+                  - ecs:UpdateService
+                Resource: '*'
+              # IAM permissions for ECS task execution
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource: '*'
+                Condition:
+                  StringEqualsIfExists:
+                    iam:PassedToService:
+                      - ecs-tasks.amazonaws.com
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-hard-wordle-codepipeline-role
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: hard-wordle
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # Test Project - Runs Jest tests only
+  TestProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub ${EnvironmentName}-hard-wordle-test
+      Description: Run Jest tests for Hard Wordle application
+      ServiceRole: !GetAtt CodeBuildServiceRole.Arn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        PrivilegedMode: false
+        EnvironmentVariables:
+          - Name: NODE_ENV
+            Value: test
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: buildspec-test.yml
+      LogsConfig:
+        CloudWatchLogs:
+          Status: ENABLED
+          GroupName: !Sub /aws/codebuild/${EnvironmentName}-hard-wordle-test
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-hard-wordle-test
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: hard-wordle
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # Build Project - Builds Docker container and pushes to ECR
+  BuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub ${EnvironmentName}-hard-wordle-build
+      Description: Build Docker container for Hard Wordle application
+      ServiceRole: !GetAtt CodeBuildServiceRole.Arn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        PrivilegedMode: true
+        EnvironmentVariables:
+          - Name: AWS_DEFAULT_REGION
+            Value: !Ref AWS::Region
+          - Name: AWS_ACCOUNT_ID
+            Value: !Ref AWS::AccountId
+          - Name: IMAGE_REPO_NAME
+            Value:
+              Fn::ImportValue: !Sub ${EnvironmentName}-hard-wordle-ecr-name
+          - Name: IMAGE_TAG
+            Value: latest
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: buildspec-build.yml
+      LogsConfig:
+        CloudWatchLogs:
+          Status: ENABLED
+          GroupName: !Sub /aws/codebuild/${EnvironmentName}-hard-wordle-build
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-hard-wordle-build
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: hard-wordle
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # Multi-Stage CodePipeline
+  Pipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Sub ${EnvironmentName}-hard-wordle-pipeline
+      RoleArn: !GetAtt CodePipelineServiceRole.Arn
+      ArtifactStore:
+        Type: S3
+        Location: !Ref ArtifactBucket
+      Stages:
+        # Source Stage
+        - Name: Source
+          Actions:
+            - Name: SourceAction
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeStarSourceConnection
+                Version: '1'
+              Configuration:
+                ConnectionArn: !Ref CodeStarConnectionArn
+                FullRepositoryId: !Ref RepositoryId
+                BranchName: !Ref BranchName
+                OutputArtifactFormat: CODE_ZIP
+                DetectChanges: true
+              OutputArtifacts:
+                - Name: SourceOutput
+        
+        # Test Stage - Run Jest tests
+        - Name: Test
+          Actions:
+            - Name: RunTests
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref TestProject
+              InputArtifacts:
+                - Name: SourceOutput
+              OutputArtifacts:
+                - Name: TestOutput
+        
+        # Build Stage - Build Docker container
+        - Name: Build
+          Actions:
+            - Name: BuildContainer
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref BuildProject
+              InputArtifacts:
+                - Name: SourceOutput
+              OutputArtifacts:
+                - Name: BuildOutput
+        
+        # Deploy Stage - Deploy to ECS
+        - Name: Deploy
+          Actions:
+            - Name: DeployToECS
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: ECS
+                Version: '1'
+              Configuration:
+                ClusterName:
+                  Fn::ImportValue: !Sub ${EnvironmentName}-hard-wordle-ecs-cluster
+                ServiceName:
+                  Fn::ImportValue: !Sub ${EnvironmentName}-hard-wordle-ecs-service
+                FileName: imagedefinitions.json
+              InputArtifacts:
+                - Name: BuildOutput
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-hard-wordle-pipeline
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: hard-wordle
+        - Key: ManagedBy
+          Value: CloudFormation
+
+Outputs:
+  PipelineName:
+    Description: CodePipeline Name
+    Value: !Ref Pipeline
+    Export:
+      Name: !Sub ${EnvironmentName}-hard-wordle-pipeline-name
+
+  PipelineUrl:
+    Description: CodePipeline URL
+    Value: !Sub https://console.aws.amazon.com/codesuite/codepipeline/pipelines/${Pipeline}/view
+
+  TestProjectName:
+    Description: CodeBuild Test Project Name
+    Value: !Ref TestProject
+    Export:
+      Name: !Sub ${EnvironmentName}-hard-wordle-test-project
+
+  BuildProjectName:
+    Description: CodeBuild Build Project Name
+    Value: !Ref BuildProject
+    Export:
+      Name: !Sub ${EnvironmentName}-hard-wordle-build-project
+
+  ArtifactBucketName:
+    Description: S3 Bucket for Pipeline Artifacts
+    Value: !Ref ArtifactBucket
+    Export:
+      Name: !Sub ${EnvironmentName}-hard-wordle-artifact-bucket

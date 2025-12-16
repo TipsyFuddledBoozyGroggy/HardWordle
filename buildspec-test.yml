@@ -1,0 +1,38 @@
+version: 0.2
+
+# Test Stage - Runs Jest tests and coverage reports
+# This stage focuses solely on testing the application
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 18
+  
+  pre_build:
+    commands:
+      - echo "🧪 Starting Test Stage..."
+      - echo "Installing dependencies..."
+      - npm ci
+  
+  build:
+    commands:
+      - echo "🔍 Running Jest tests..."
+      - npm test
+      - echo "📊 Generating test coverage report..."
+      - npm run test:coverage
+  
+  post_build:
+    commands:
+      - echo "✅ All tests passed successfully!"
+      - echo "📈 Test coverage report generated"
+
+reports:
+  jest_reports:
+    files:
+      - coverage/lcov.info
+    file-format: 'CLOVERXML'
+    base-directory: 'coverage'
+
+cache:
+  paths:
+    - 'node_modules/**/*'
