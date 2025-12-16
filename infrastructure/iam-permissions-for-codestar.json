@@ -1,0 +1,28 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "CodeStarConnectionsManagement",
+            "Effect": "Allow",
+            "Action": [
+                "codestar-connections:CreateConnection",
+                "codestar-connections:DeleteConnection",
+                "codestar-connections:GetConnection",
+                "codestar-connections:ListConnections",
+                "codestar-connections:UpdateConnectionInstallation",
+                "codestar-connections:UseConnection"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "CodeStarConnectionsTagging",
+            "Effect": "Allow",
+            "Action": [
+                "codestar-connections:TagResource",
+                "codestar-connections:UntagResource",
+                "codestar-connections:ListTagsForResource"
+            ],
+            "Resource": "*"
+        }
+    ]
+}

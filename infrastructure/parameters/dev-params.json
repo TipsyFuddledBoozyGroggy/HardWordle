@@ -41,11 +41,11 @@
   },
   {
     "ParameterKey": "CodeStarConnectionArn",
-    "ParameterValue": "REPLACE_WITH_YOUR_CODESTAR_CONNECTION_ARN"
+    "ParameterValue": "arn:aws:codestar-connections:us-east-1:864899864715:connection/4d4599b3-2785-4c7b-b980-9a3f5ea40caf"
   },
   {
     "ParameterKey": "RepositoryId",
-    "ParameterValue": "REPLACE_WITH_OWNER/REPO_NAME"
+    "ParameterValue": "TipsyFuddledBoozyGroggy/hard-wordle"
   },
   {
     "ParameterKey": "BranchName",

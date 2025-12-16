@@ -1,19 +1,19 @@
 [
   {
     "ParameterKey": "EnvironmentName",
-    "ParameterValue": "prod"
+    "ParameterValue": "dev"
   },
   {
     "ParameterKey": "VpcCIDR",
-    "ParameterValue": "10.1.0.0/16"
+    "ParameterValue": "10.0.0.0/16"
   },
   {
     "ParameterKey": "PublicSubnet1CIDR",
-    "ParameterValue": "10.1.1.0/24"
+    "ParameterValue": "10.0.1.0/24"
   },
   {
     "ParameterKey": "PublicSubnet2CIDR",
-    "ParameterValue": "10.1.2.0/24"
+    "ParameterValue": "10.0.2.0/24"
   },
   {
     "ParameterKey": "ContainerImage",
@@ -21,27 +21,27 @@
   },
   {
     "ParameterKey": "DesiredCount",
-    "ParameterValue": "2"
+    "ParameterValue": "1"
   },
   {
     "ParameterKey": "MinTaskCount",
-    "ParameterValue": "2"
+    "ParameterValue": "1"
   },
   {
     "ParameterKey": "MaxTaskCount",
-    "ParameterValue": "4"
+    "ParameterValue": "2"
   },
   {
     "ParameterKey": "ContainerCpu",
-    "ParameterValue": "512"
+    "ParameterValue": "256"
   },
   {
     "ParameterKey": "ContainerMemory",
-    "ParameterValue": "1024"
+    "ParameterValue": "512"
   },
   {
     "ParameterKey": "CodeStarConnectionArn",
-    "ParameterValue": "arn:aws:codestar-connections:us-east-1:864899864715:connection/4d4599b3-2785-4c7b-b980-9a3f5ea40caf"
+    "ParameterValue": "REPLACE_WITH_YOUR_CODESTAR_CONNECTION_ARN"
   },
   {
     "ParameterKey": "RepositoryId",

@@ -1,330 +1,114 @@
-# AWS CodeStar Connection Setup Guide
+# CodeStar Connection Setup Guide
 
-This guide walks you through setting up AWS CodeStar Connections to automatically trigger your CI/CD pipeline when you push to your Git repository.
+This guide will help you set up the CodeStar connection between AWS and GitHub for your Hard Wordle CI/CD pipeline.
 
 ## Prerequisites
 
-- AWS Account with appropriate permissions
-- Git repository (GitHub, GitLab, or Bitbucket)
-- AWS CLI configured
-- Repository pushed to your Git provider
+- AWS CLI configured with appropriate permissions
+- GitHub repository created: `TipsyFuddledBoozyGroggy/hard-wordle`
+- Your code pushed to the GitHub repository
 
-## Step 1: Get Your Repository Information
+## Step 1: Create CodeStar Connection
 
-Run these commands in your local repository:
+Since your current IAM user doesn't have CodeStar permissions, you'll need to create the connection through the AWS Console:
 
-```bash
-# Get the remote URL
-git remote -v
+### Using AWS Console:
 
-# Get current branch
-git branch --show-current
-```
+1. **Navigate to CodePipeline**:
+   - Go to [AWS Console](https://console.aws.amazon.com)
+   - Search for "CodePipeline" and click on it
 
-From the remote URL, extract:
-- **Repository Owner**: Your username or organization (e.g., `myusername`)
-- **Repository Name**: The repo name (e.g., `hard-wordle`)
-- **Full Repository ID**: Format as `owner/repo-name` (e.g., `myusername/hard-wordle`)
+2. **Access Connections**:
+   - In the left sidebar, click "Settings" → "Connections"
 
-Example:
-```
-Remote URL: https://github.com/myusername/hard-wordle.git
-Owner: myusername
-Repo: hard-wordle
-Full Repository ID: myusername/hard-wordle
-```
-
-## Step 2: Create CodeStar Connection in AWS Console
-
-### Option A: Using AWS Console (Recommended)
-
-1. **Navigate to CodeStar Connections**:
-   - Go to AWS Console → Developer Tools → CodePipeline → Settings → Connections
-   - Direct link: https://console.aws.amazon.com/codesuite/settings/connections
-
-2. **Create Connection**:
+3. **Create Connection**:
    - Click "Create connection"
-   - Select your provider:
-     - GitHub
-     - GitLab
-     - Bitbucket
-   - Connection name: `hard-wordle-connection` (or your preferred name)
-   - Click "Connect to [Provider]"
+   - Select "GitHub" as the provider
+   - Connection name: `hard-wordle-github-connection`
+   - Click "Connect to GitHub"
 
-3. **Authorize AWS**:
-   - You'll be redirected to your Git provider
-   - Sign in if needed
-   - Click "Authorize AWS Connector for [Provider]"
-   - Select which repositories to grant access:
-     - "All repositories" (easier)
-     - "Only select repositories" (more secure - select your hard-wordle repo)
-   - Click "Install" or "Authorize"
+4. **Authorize GitHub**:
+   - You'll be redirected to GitHub
+   - Click "Authorize AWS Connector for GitHub"
+   - Select your GitHub account if prompted
 
-4. **Complete Connection**:
-   - You'll be redirected back to AWS Console
-   - Connection status should show "Available"
-   - **Copy the Connection ARN** - it looks like:
-     ```
-     arn:aws:codestar-connections:us-east-1:123456789012:connection/abc123def456...
-     ```
+5. **Complete Connection**:
+   - Back in AWS Console, click "Connect"
+   - **IMPORTANT**: Copy the Connection ARN (looks like: `arn:aws:codestar-connections:us-east-1:864899864715:connection/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`)
 
-### Option B: Using AWS CLI
+## Step 2: Update Parameter Files
+
+Run the helper script with your connection ARN:
 
 ```bash
-# Create the connection (this creates a pending connection)
-aws codestar-connections create-connection \
-  --provider-type GitHub \
-  --connection-name hard-wordle-connection
-
-# Note the ConnectionArn from the output
-# You must complete the handshake in the AWS Console
-# Go to: https://console.aws.amazon.com/codesuite/settings/connections
-# Find your connection and click "Update pending connection"
-# Follow the authorization flow
+./infrastructure/update-codestar-connection.sh "arn:aws:codestar-connections:us-east-1:864899864715:connection/YOUR-CONNECTION-ID"
 ```
 
-## Step 3: Update Parameter Files
+## Step 3: Verify Configuration
 
-Update the parameter files with your information:
-
-### For Development Environment
-
-Edit `infrastructure/parameters/dev-params.json`:
-
-```json
-{
-  "ParameterKey": "CodeStarConnectionArn",
-  "ParameterValue": "arn:aws:codestar-connections:us-east-1:123456789012:connection/abc123..."
-},
-{
-  "ParameterKey": "RepositoryId",
-  "ParameterValue": "myusername/hard-wordle"
-},
-{
-  "ParameterKey": "BranchName",
-  "ParameterValue": "main"
-}
-```
-
-### For Production Environment
-
-Edit `infrastructure/parameters/prod-params.json`:
-
-```json
-{
-  "ParameterKey": "CodeStarConnectionArn",
-  "ParameterValue": "arn:aws:codestar-connections:us-east-1:123456789012:connection/abc123..."
-},
-{
-  "ParameterKey": "RepositoryId",
-  "ParameterValue": "myusername/hard-wordle"
-},
-{
-  "ParameterKey": "BranchName",
-  "ParameterValue": "main"
-}
-```
-
-## Step 4: Deploy the Infrastructure
-
-### Deploy All Stacks
+Check that your parameter files have been updated:
 
 ```bash
-cd infrastructure
+# Check dev parameters
+grep -A 1 "CodeStarConnectionArn" infrastructure/parameters/dev-params.json
 
-# For development environment
-./deploy.sh dev
-
-# For production environment
-./deploy.sh prod
+# Check prod parameters  
+grep -A 1 "CodeStarConnectionArn" infrastructure/parameters/prod-params.json
 ```
 
-The deploy script will create stacks in this order:
-1. Network stack (VPC, subnets, security groups)
-2. ECR stack (container registry)
-3. ECS stack (cluster, service, load balancer)
-4. Pipeline stack (CI/CD pipeline with CodeStar connection)
+## Step 4: Deploy Infrastructure
 
-### Deploy Only the Pipeline Stack
-
-If you've already deployed the other stacks and only need to update the pipeline:
+Deploy your infrastructure stacks:
 
 ```bash
-# Development
-aws cloudformation deploy \
-  --template-file pipeline-stack.yaml \
-  --stack-name hard-wordle-pipeline-dev \
-  --parameter-overrides file://parameters/dev-params.json \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --region us-east-1
+# Deploy development environment
+./infrastructure/deploy.sh dev
 
-# Production
-aws cloudformation deploy \
-  --template-file pipeline-stack.yaml \
-  --stack-name hard-wordle-pipeline-prod \
-  --parameter-overrides file://parameters/prod-params.json \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --region us-east-1
+# Or deploy production environment
+./infrastructure/deploy.sh prod
 ```
 
-## Step 5: Verify the Setup
+## Repository Information
 
-### Check Pipeline Status
-
-```bash
-# Get pipeline name
-aws cloudformation describe-stacks \
-  --stack-name hard-wordle-pipeline-dev \
-  --query 'Stacks[0].Outputs[?OutputKey==`PipelineName`].OutputValue' \
-  --output text
-
-# Check pipeline status
-aws codepipeline get-pipeline-state \
-  --name dev-hard-wordle-pipeline
-```
-
-### View in AWS Console
-
-1. Go to AWS Console → CodePipeline
-2. Find your pipeline: `dev-hard-wordle-pipeline` or `prod-hard-wordle-pipeline`
-3. You should see the pipeline with three stages:
-   - Source (connected to your Git repo)
-   - Build (CodeBuild project)
-   - Deploy (ECS deployment)
-
-## Step 6: Test the Pipeline
-
-### Trigger a Build
-
-Push a change to your repository:
-
-```bash
-# Make a small change
-echo "# Test" >> README.md
-
-# Commit and push
-git add README.md
-git commit -m "Test pipeline trigger"
-git push origin main
-```
-
-The pipeline should automatically:
-1. Detect the change (within ~1 minute)
-2. Pull the source code
-3. Run tests via CodeBuild
-4. Build Docker image
-5. Push to ECR
-6. Deploy to ECS
-
-### Monitor the Pipeline
-
-```bash
-# Watch pipeline execution
-aws codepipeline get-pipeline-state \
-  --name dev-hard-wordle-pipeline
-
-# View CodeBuild logs
-aws logs tail /aws/codebuild/dev-hard-wordle-build --follow
-```
-
-Or view in AWS Console:
-- CodePipeline: https://console.aws.amazon.com/codesuite/codepipeline/pipelines
-- CodeBuild: https://console.aws.amazon.com/codesuite/codebuild/projects
-
-## Step 7: Access Your Application
-
-After successful deployment:
-
-```bash
-# Get the load balancer URL
-aws cloudformation describe-stacks \
-  --stack-name hard-wordle-ecs-dev \
-  --query 'Stacks[0].Outputs[?OutputKey==`LoadBalancerURL`].OutputValue' \
-  --output text
-```
-
-Open the URL in your browser to access Hard Wordle!
+- **Repository**: `TipsyFuddledBoozyGroggy/hard-wordle`
+- **Branch**: `main`
+- **GitHub URL**: https://github.com/TipsyFuddledBoozyGroggy/hard-wordle
 
 ## Troubleshooting
 
-### Connection Status is "Pending"
+### Connection Status Issues
 
-- Go to AWS Console → CodeStar Connections
-- Click "Update pending connection"
-- Complete the authorization flow with your Git provider
+If your connection shows as "Pending" or "Available":
+- **Pending**: The connection is being set up
+- **Available**: Ready to use
+- **Error**: Check GitHub authorization
 
-### Pipeline Not Triggering on Push
+### Pipeline Failures
 
-1. **Check Connection Status**:
-   ```bash
-   aws codestar-connections get-connection \
-     --connection-arn YOUR_CONNECTION_ARN
-   ```
-   Status should be "AVAILABLE"
+If the pipeline fails to start:
+1. Verify the connection ARN is correct
+2. Check that the repository exists and is accessible
+3. Ensure the branch name matches (default: `main`)
 
-2. **Verify Repository ID Format**:
-   - Must be `owner/repo-name` (case-sensitive)
-   - No spaces, no `.git` extension
+### Permission Issues
 
-3. **Check Branch Name**:
-   - Ensure branch name matches exactly (case-sensitive)
-   - Common: `main` vs `master`
+If you get permission errors:
+1. Your IAM user needs additional CodeStar permissions
+2. Contact your AWS administrator to add these policies:
+   - `AWSCodeStarFullAccess` or
+   - Custom policy with `codestar-connections:*` permissions
 
-4. **Verify Webhook**:
-   - CodeStar automatically creates webhooks
-   - Check your Git provider's webhook settings
-   - Should see AWS webhook pointing to CodePipeline
+## Next Steps
 
-### Build Fails
+After successful setup:
+1. Push code to your GitHub repository
+2. The pipeline will automatically trigger
+3. Monitor the pipeline in AWS CodePipeline console
+4. Access your deployed application via the ALB DNS name
 
-1. **Check CodeBuild Logs**:
-   ```bash
-   aws logs tail /aws/codebuild/dev-hard-wordle-build --follow
-   ```
+## Support
 
-2. **Common Issues**:
-   - Tests failing: Fix tests locally first
-   - ECR permissions: Check CodeBuild IAM role
-   - Missing dependencies: Verify `package.json`
-
-### Deployment Fails
-
-1. **Check ECS Service**:
-   ```bash
-   aws ecs describe-services \
-     --cluster dev-hard-wordle-cluster \
-     --services dev-hard-wordle-service
-   ```
-
-2. **Check Task Logs**:
-   - Go to ECS Console → Clusters → Tasks
-   - Click on failed task → Logs tab
-
-3. **Common Issues**:
-   - Image pull errors: Check ECR permissions
-   - Health check failures: Verify nginx configuration
-   - Resource limits: Check CPU/memory allocation
-
-## Security Best Practices
-
-1. **Least Privilege**: Grant CodeStar connection access only to required repositories
-2. **Separate Connections**: Use different connections for dev and prod if needed
-3. **Monitor Access**: Regularly review connection access in your Git provider
-4. **Rotate Credentials**: If using CLI, rotate AWS credentials regularly
-5. **Branch Protection**: Enable branch protection rules in your Git provider
-
-## Additional Resources
-
-- [AWS CodeStar Connections Documentation](https://docs.aws.amazon.com/codepipeline/latest/userguide/connections.html)
-- [CodePipeline with GitHub](https://docs.aws.amazon.com/codepipeline/latest/userguide/connections-github.html)
-- [Troubleshooting CodeStar Connections](https://docs.aws.amazon.com/dtconsole/latest/userguide/troubleshooting-connections.html)
-
-## Summary
-
-You've now configured:
-- ✅ CodeStar Connection to your Git repository
-- ✅ Automated CI/CD pipeline
-- ✅ Automatic deployments on every push
-- ✅ Full infrastructure as code
-
-Every time you push to your repository, the pipeline will automatically build, test, and deploy your application to AWS!
+For issues with this setup:
+1. Check AWS CloudFormation stack events
+2. Review CodePipeline execution details
+3. Check CodeBuild logs for build failures
