@@ -1,0 +1,7 @@
+# MCP Browser local data
+logs/
+data/
+*.log
+*.jsonl
+*.tmp
+.DS_Store

@@ -15,7 +15,10 @@ NC='\033[0m' # No Color
 # Configuration
 ENVIRONMENT=${1:-dev}
 REGION=${AWS_DEFAULT_REGION:-us-east-1}
-PARAMS_FILE="infrastructure/parameters/free-tier-dev-params.json"
+NETWORK_PARAMS="infrastructure/parameters/network-params.json"
+ECR_PARAMS="infrastructure/parameters/ecr-params.json"
+WEBSITE_PARAMS="infrastructure/parameters/website-params.json"
+PIPELINE_PARAMS="infrastructure/parameters/free-tier-dev-params.json"
 
 # Stack names
 NETWORK_STACK="hard-wordle-network-${ENVIRONMENT}"
@@ -30,11 +33,13 @@ echo -e "${GREEN}Region: ${REGION}${NC}"
 echo -e "${BLUE}💰 COST: $0.00 (100% Free Tier)${NC}"
 echo -e "${GREEN}========================================${NC}"
 
-# Check if parameters file exists
-if [ ! -f "$PARAMS_FILE" ]; then
-    echo -e "${RED}Error: Parameters file not found: ${PARAMS_FILE}${NC}"
-    exit 1
-fi
+# Check if parameters files exist
+for params_file in "$NETWORK_PARAMS" "$ECR_PARAMS" "$WEBSITE_PARAMS" "$PIPELINE_PARAMS"; do
+    if [ ! -f "$params_file" ]; then
+        echo -e "${RED}Error: Parameters file not found: ${params_file}${NC}"
+        exit 1
+    fi
+done
 
 # Function to wait for stack completion
 wait_for_stack() {
@@ -95,16 +100,16 @@ deploy_stack() {
 
 # Deploy stacks in order (FREE TIER ONLY)
 echo -e "${GREEN}Step 1: Deploying Network Stack (FREE)${NC}"
-deploy_stack ${NETWORK_STACK} "infrastructure/network-stack.yaml" ${PARAMS_FILE}
+deploy_stack ${NETWORK_STACK} "infrastructure/network-stack.yaml" ${NETWORK_PARAMS}
 
 echo -e "${GREEN}Step 2: Deploying ECR Stack (FREE - 500MB)${NC}"
-deploy_stack ${ECR_STACK} "infrastructure/ecr-stack.yaml" ${PARAMS_FILE}
+deploy_stack ${ECR_STACK} "infrastructure/ecr-stack.yaml" ${ECR_PARAMS}
 
 echo -e "${GREEN}Step 3: Deploying S3 Website Stack (FREE - 5GB)${NC}"
-deploy_stack ${WEBSITE_STACK} "infrastructure/free-tier-ecs-stack.yaml" ${PARAMS_FILE}
+deploy_stack ${WEBSITE_STACK} "infrastructure/free-tier-ecs-stack.yaml" ${WEBSITE_PARAMS}
 
 echo -e "${GREEN}Step 4: Deploying Pipeline Stack (FREE - 1 pipeline, 100 minutes)${NC}"
-deploy_stack ${PIPELINE_STACK} "infrastructure/free-tier-pipeline-stack.yaml" ${PARAMS_FILE}
+deploy_stack ${PIPELINE_STACK} "infrastructure/free-tier-pipeline-stack.yaml" ${PIPELINE_PARAMS}
 
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}FREE TIER Deployment completed!${NC}"

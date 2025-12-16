@@ -98,14 +98,14 @@ Resources:
                   - s3:DeleteObject
                   - s3:ListBucket
                 Resource:
-                  - Fn::ImportValue: !Sub ${EnvironmentName}-hard-wordle-bucket-name
                   - !Sub 
-                    - "${BucketArn}/*"
-                    - BucketArn: 
-                        Fn::Sub:
-                          - "arn:aws:s3:::${BucketName}"
-                          - BucketName:
-                              Fn::ImportValue: !Sub ${EnvironmentName}-hard-wordle-bucket-name
+                    - "arn:aws:s3:::${BucketName}"
+                    - BucketName:
+                        Fn::ImportValue: !Sub ${EnvironmentName}-hard-wordle-bucket-name
+                  - !Sub 
+                    - "arn:aws:s3:::${BucketName}/*"
+                    - BucketName:
+                        Fn::ImportValue: !Sub ${EnvironmentName}-hard-wordle-bucket-name
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentName}-hard-wordle-codebuild-role
@@ -151,6 +151,12 @@ Resources:
                   - codebuild:StartBuild
                 Resource:
                   - !GetAtt CodeBuildProject.Arn
+              # CodeStar Connections permissions
+              - Effect: Allow
+                Action:
+                  - codestar-connections:UseConnection
+                Resource:
+                  - !Ref CodeStarConnectionArn
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentName}-hard-wordle-codepipeline-role

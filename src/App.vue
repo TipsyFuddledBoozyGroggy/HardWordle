@@ -17,20 +17,7 @@
       </div>
     </div>
     
-    <div id="input-section">
-      <input 
-        v-model="currentGuess" 
-        @keydown.enter="handleGuessSubmit"
-        @keydown="handleKeydown"
-        id="guess-input" 
-        type="text" 
-        maxlength="5" 
-        placeholder="Enter your guess"
-        :disabled="isGameOver"
-        ref="guessInput"
-      />
-      <button @click="handleGuessSubmit" id="submit-btn" :disabled="isGameOver">Submit</button>
-    </div>
+    <!-- Input is now handled through the on-screen keyboard and direct typing -->
     
     <div id="keyboard">
       <div v-for="(row, index) in keyboardLayout" :key="index" class="keyboard-row">
@@ -62,7 +49,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, nextTick } from 'vue';
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 
 export default {
   name: 'App',
@@ -78,7 +65,7 @@ export default {
     const messageType = ref('');
     const definition = ref(null);
     const keyboardState = ref({});
-    const guessInput = ref(null);
+
     
     const keyboardLayout = [
       ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
@@ -92,13 +79,34 @@ export default {
     const attemptsUsed = computed(() => gameState.value?.getGuesses().length || 0);
     
     const boardRows = computed(() => {
-      if (!gameState.value) return [];
+      console.log('Computing boardRows... currentGuess:', currentGuess.value, 'gameState exists:', !!gameState.value);
+      
+      if (!gameState.value) {
+        console.log('No gameState, creating grid with current guess in first row');
+        // Even without gameState, show current guess in first row
+        const rows = [];
+        for (let rowIndex = 0; rowIndex < 6; rowIndex++) {
+          const row = [];
+          for (let colIndex = 0; colIndex < 5; colIndex++) {
+            const isCurrentRow = rowIndex === 0;
+            const hasLetter = isCurrentRow && colIndex < currentGuess.value.length;
+            row.push({
+              letter: hasLetter ? currentGuess.value[colIndex].toUpperCase() : '',
+              status: 'empty',
+              active: hasLetter
+            });
+          }
+          rows.push(row);
+        }
+        return rows;
+      }
       
       const guesses = gameState.value.getGuesses();
       const rows = [];
+      console.log('Current guesses:', guesses.length);
       
-      // Add completed guess rows
-      guesses.forEach(guess => {
+      // Add completed guess rows with feedback
+      guesses.forEach((guess, guessIndex) => {
         const feedback = guess.getFeedback();
         const row = feedback.map(letterFeedback => ({
           letter: letterFeedback.letter.toUpperCase(),
@@ -106,9 +114,10 @@ export default {
           active: false
         }));
         rows.push(row);
+        console.log(`Added completed guess ${guessIndex + 1}:`, row.map(t => `${t.letter}(${t.status})`).join(' '));
       });
       
-      // Add current guess row (if game not over)
+      // Add current guess row (if game not over and we haven't used all attempts)
       if (!isGameOver.value && rows.length < maxAttempts.value) {
         const currentRow = [];
         for (let i = 0; i < 5; i++) {
@@ -119,6 +128,7 @@ export default {
           });
         }
         rows.push(currentRow);
+        console.log('Added current guess row:', currentRow.map(t => t.letter || '_').join(''));
       }
       
       // Fill remaining empty rows
@@ -131,6 +141,7 @@ export default {
         rows.push(emptyRow);
       }
       
+      console.log(`Final board: ${rows.length} rows, ${guesses.length} completed guesses`);
       return rows;
     });
     
@@ -163,32 +174,43 @@ export default {
     };
     
     const handleKeyPress = (key) => {
+      console.log('Key pressed:', key);
       if (isGameOver.value) return;
       
       if (key === 'ENTER') {
+        console.log('Enter pressed, submitting guess:', currentGuess.value);
         handleGuessSubmit();
       } else if (key === 'BACKSPACE') {
         if (currentGuess.value.length > 0) {
+          console.log('Backspace pressed, removing letter');
           currentGuess.value = currentGuess.value.slice(0, -1);
         }
       } else if (currentGuess.value.length < 5) {
+        console.log('Adding letter:', key);
         currentGuess.value += key;
       }
-      
-      nextTick(() => {
-        guessInput.value?.focus();
-      });
+      console.log('Current guess after key press:', currentGuess.value);
     };
     
-    const handleKeydown = (event) => {
+    const handleGlobalKeydown = (event) => {
       if (isGameOver.value) return;
       
       const key = event.key.toUpperCase();
+      console.log('Global key pressed:', key);
       
-      if (key === 'BACKSPACE' && currentGuess.value.length > 0) {
-        // Let default behavior handle it
-      } else if (/^[A-Z]$/.test(key) && currentGuess.value.length >= 5) {
+      if (key === 'ENTER') {
         event.preventDefault();
+        handleGuessSubmit();
+      } else if (key === 'BACKSPACE') {
+        event.preventDefault();
+        if (currentGuess.value.length > 0) {
+          currentGuess.value = currentGuess.value.slice(0, -1);
+        }
+      } else if (/^[A-Z]$/.test(key)) {
+        event.preventDefault();
+        if (currentGuess.value.length < 5) {
+          currentGuess.value += key;
+        }
       }
     };
     
@@ -196,6 +218,7 @@ export default {
       if (isGameOver.value) return;
       
       const input = currentGuess.value.trim();
+      console.log('Submitting guess:', input);
       
       showMessage('', '');
       
@@ -204,17 +227,29 @@ export default {
         return;
       }
       
+      if (input.length !== 5) {
+        showMessage('Word must be 5 letters long', 'error');
+        return;
+      }
+      
+      console.log('Game state before submission:', gameState.value ? gameState.value.getGuesses().length : 'no game state');
+      
       const result = props.gameController.submitGuess(input);
+      console.log('Submission result:', result);
       
       if (!result.success) {
         showMessage(result.error, 'error');
         return;
       }
       
+      console.log('Game state after submission:', gameState.value ? gameState.value.getGuesses().length : 'no game state');
+      
+      // Clear current guess after successful submission
       currentGuess.value = '';
       
       if (result.guess) {
         updateKeyboardState(result.guess);
+        console.log('Updated keyboard state for guess');
       }
       
       if (result.gameStatus === 'won') {
@@ -222,9 +257,7 @@ export default {
       } else if (result.gameStatus === 'lost') {
         showGameOver(false);
       } else {
-        nextTick(() => {
-          guessInput.value?.focus();
-        });
+        console.log('Game continues, next guess ready');
       }
     };
     
@@ -275,19 +308,24 @@ export default {
     };
     
     const handleNewGame = () => {
+      console.log('Starting new game...');
       props.gameController.startNewGame();
       currentGuess.value = '';
       showMessage('', '');
       definition.value = null;
       resetKeyboardState();
-      
-      nextTick(() => {
-        guessInput.value?.focus();
-      });
+      console.log('New game started, gameState:', gameState.value);
     };
     
     onMounted(() => {
       handleNewGame();
+      // Add global keyboard event listener
+      document.addEventListener('keydown', handleGlobalKeydown);
+    });
+    
+    // Clean up event listener when component unmounts
+    onUnmounted(() => {
+      document.removeEventListener('keydown', handleGlobalKeydown);
     });
     
     return {
@@ -301,9 +339,8 @@ export default {
       isGameOver,
       maxAttempts,
       attemptsUsed,
-      guessInput,
       handleKeyPress,
-      handleKeydown,
+      handleGlobalKeydown,
       handleGuessSubmit,
       handleNewGame
     };
