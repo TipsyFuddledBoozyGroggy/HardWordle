@@ -20,6 +20,17 @@ module.exports = {
     '\\.(css|less|scss|sass)$': '<rootDir>/tests/__mocks__/styleMock.js'
   },
   transform: {
-    '^.+\\.js$': ['babel-jest', { configFile: './.babelrc' }]
+    '^.+\\.js$': ['babel-jest', { configFile: './.babelrc' }],
+    '^.+\\.vue$': '@vue/vue3-jest'
+  },
+  testEnvironmentOptions: {
+    customExportConditions: ['node', 'node-addons']
+  },
+  globals: {
+    'vue-jest': {
+      compilerOptions: {
+        isCustomElement: tag => tag.startsWith('ion-')
+      }
+    }
   }
 };

@@ -1,0 +1,41 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:GetObjectVersion",
+        "s3:GetBucketLocation",
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::dev-hard-wordle-artifacts-864899864715",
+        "arn:aws:s3:::dev-hard-wordle-artifacts-864899864715/*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "codebuild:BatchGetBuilds",
+        "codebuild:StartBuild"
+      ],
+      "Resource": [
+        "arn:aws:codebuild:us-east-1:864899864715:project/dev-hard-wordle-build",
+        "arn:aws:codebuild:us-east-1:864899864715:project/dev-hard-wordle-test",
+        "arn:aws:codebuild:us-east-1:864899864715:project/dev-hard-wordle-build-app",
+        "arn:aws:codebuild:us-east-1:864899864715:project/dev-hard-wordle-deploy-s3"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "codestar-connections:UseConnection"
+      ],
+      "Resource": [
+        "arn:aws:codestar-connections:us-east-1:864899864715:connection/4d4599b3-2785-4c7b-b980-9a3f5ea40caf"
+      ]
+    }
+  ]
+}

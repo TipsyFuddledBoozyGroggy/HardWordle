@@ -99,6 +99,9 @@ describe('GameController', () => {
     });
 
     test('should normalize case when submitting guess', () => {
+      // Start a new game to ensure clean state
+      gameController.startNewGame();
+      
       const result1 = gameController.submitGuess('APPLE');
       expect(result1.success).toBe(true);
       expect(result1.guess.getWord()).toBe('apple');
